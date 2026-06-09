@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DISCO 02.0 - Pencak Silat Digital Scoring</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    
+    <!-- Firebase Legacy SDK (v8) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap');
+        body { font-family: 'Montserrat', sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; height: 100vh; width: 100vw; overflow: hidden; }
+        
+        .screen { display: none; height: 100vh; width: 100vw; flex-direction: column; position: absolute; top: 0; left: 0; background: #f8fafc; }
+        .screen.active { display: flex; }
+
+        /* Tombol Timbul Efek */
+        .btn-raise { transition: all 0.1s; border-bottom-width: 4px !important; position: relative; top: 0; }
+        .btn-raise:active { top: 2px !important; border-bottom-width: 1px !important; transform: scale(0.98); }
+        
+        .btn-pressed { 
+            top: 3px !important; 
+            border-bottom-width: 0px !important; 
+            background-color: #fbbf24 !important; 
+            color: #000 !important; 
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2) !important;
+        }
+
+        .btn-compact { 
+            padding: 5px 2px; 
+            font-size: 7px; 
+            font-weight: 800; 
+            border-radius: 8px; 
+            border: 1px solid #e2e8f0; 
+            background: white; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            text-transform: uppercase;
+            line-height: 1;
+        }
+        
+        .active-dis { background-color: #1e293b !important; color: #ef4444 !important; border-color: #ef4444 !important; opacity: 1 !important; top: 3px !important; border-bottom-width: 0px !important;}
+        .active-babak { background-color: #10b981 !important; color: white !important; border-color: #059669 !important; box-shadow: 0 0 10px #10b981; }
+        
+        .sudut-merah-bg { background-color: #ef4444; color: white; }
+        .sudut-biru-bg { background-color: #3b82f6; color: white; }
+        .winner-glow { box-shadow: 0 0 15px #22c55e; border: 3px solid #22c55e !important; }
+        
+        .table-scoring { width: 100%; font-size: 8px; border-collapse: collapse; }
+        .table-scoring th, .table-scoring td { border: 1px solid #e2e8f0; padding: 3px; text-align: center; }
+        
+        .custom-scroll { overflow-y: auto; }
+        .custom-scroll::-webkit-scrollbar { width: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .save-notif { position: fixed; top: 20px; right: 20px; background: #10b981; color: white; padding: 15px 25px; border-radius: 15px; font-weight: bold; transform: translateX(200%); transition: 0.5s; z-index: 60000; }
+        .save-notif.show { transform: translateX(0); }
+
+        .status-header { font-size: 8px; font-weight: 800; text-transform: uppercase; padding: 6px; border-radius: 8px; text-align: left; margin-bottom: 2px; line-height: 1.3; }
+        
+        .sekre-tab { cursor: pointer; padding: 10px; font-weight: 800; font-size: 10px; text-transform: uppercase; border-bottom: 3px solid transparent; transition: 0.3s; }
+        .sekre-tab.active { border-color: #a855f7; color: #a855f7; }
+
+        .log-box { font-family: monospace; font-size: 9px; background: rgba(0,0,0,0.1); padding: 4px; border-radius: 4px; min-height: 1.5em; max-height: 3em; overflow-x: auto; white-space: nowrap; }
+
+        /* Status Lights Indicator */
+        .light-tanding { background-color: #10b981 !important; color: white !important; box-shadow: 0 0 8px #10b981; }
+        .light-siap { background-color: #f59e0b !important; color: white !important; box-shadow: 0 0 8px #f59e0b; }
+        .light-selesai { background-color: #ef4444 !important; color: white !important; box-shadow: 0 0 8px #ef4444; }
+    </style>
+</head>
+<body>
+
+    <div id="save-ani" class="save-notif shadow-xl"><i class="fas fa-check-circle mr-2"></i> Data Tersimpan!</div>
+
+    <!-- LANDING PAGE -->
+    <div id="screen-landing" class="screen active p-8 justify-center items-center text-center">
+        <div class="mb-10">
+            <h1 class="text-3xl font-black uppercase leading-tight"><span class="text-emerald-500">Pencak Silat</span><br>Digital Scoring</h1>
+            <div class="h-1 w-20 bg-red-500 mx-auto mt-4 rounded-full"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 w-full max-w-sm">
+            <button onclick="changeScreen('dewan')" class="bg-white p-5 rounded-[2rem] shadow-sm border-b-4 border-emerald-500 font-black text-[10px] uppercase italic"><i class="fas fa-user-tie mb-2 block text-2xl text-emerald-500"></i>Dewan</button>
+            <button onclick="changeScreen('juri-select')" class="bg-white p-5 rounded-[2rem] shadow-sm border-b-4 border-blue-500 font-black text-[10px] uppercase italic"><i class="fas fa-users mb-2 block text-2xl text-blue-500"></i>Juri</button>
+            <button onclick="changeScreen('sekretaris')" class="bg-white p-5 rounded-[2rem] shadow-sm border-b-4 border-purple-500 font-black text-[10px] uppercase italic"><i class="fas fa-file-signature mb-2 block text-2xl text-purple-500"></i>Sekretaris</button>
+            <button onclick="changeScreen('monitor')" class="bg-white p-5 rounded-[2rem] shadow-sm border-b-4 border-orange-500 font-black text-[10px] uppercase italic"><i class="fas fa-desktop mb-2 block text-2xl text-orange-500"></i>Monitor</button>
+            <button onclick="changeScreen('skema')" class="bg-white p-5 rounded-[2rem] shadow-sm border-b-4 border-yellow-500 font-black text-[10px] uppercase italic"><i class="fas fa-sitemap mb-2 block text-2xl text-yellow-500"></i>Skema</button>
+            <button onclick="changeScreen('riwayat')" class="bg-white p-5 rounded-[2rem] shadow-sm border-b-4 border-slate-500 font-black text-[10px] uppercase italic"><i class="fas fa-history mb-2 block text-2xl text-slate-500"></i>Riwayat</button>
+        </div>
+    </div>
+
+    <!-- SEKRETARIS SCREEN -->
+    <div id="screen-sekretaris" class="screen">
+        <div class="p-4 bg-white shadow-sm flex justify-between items-center">
+            <button onclick="changeScreen('landing')" class="text-gray-400"><i class="fas fa-arrow-left"></i></button>
+            <div class="flex gap-4">
+                <div id="tab-input" onclick="switchSekreTab('input')" class="sekre-tab active">Input Data</div>
+                <div id="tab-bagan" onclick="switchSekreTab('bagan')" class="sekre-tab">Bagan</div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportData()" class="text-emerald-600 text-[10px] font-bold">EXPORT</button>
+                <button onclick="resetAllData()" class="text-red-600 text-[10px] font-bold">RESET</button>
+            </div>
+        </div>
+        <div id="sekre-input-view" class="flex-1 overflow-y-auto p-4 bg-slate-50">
+            <div id="sekre-form-container" class="space-y-4 pb-20"></div>
+            <div class="fixed bottom-0 left-0 right-0 p-4 bg-white border-t">
+                <button onclick="saveSekreData()" class="w-full bg-purple-600 text-white p-4 rounded-xl font-black uppercase text-xs">Simpan Perubahan</button>
+            </div>
+        </div>
+        <div id="sekre-bagan-view" class="flex-1 overflow-y-auto p-1 bg-white hidden">
+            <table class="w-full text-[8px] border-collapse">
+                <thead class="bg-slate-100">
+                    <tr>
+                        <th class="border p-2">PARTAI</th>
+                        <th class="border p-2">RINCIAN ATLET</th>
+                        <th class="border p-2">STATUS LAMPU</th>
+                        <th class="border p-2">AKSI</th>
+                    </tr>
+                </thead>
+                <tbody id="bagan-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- DEWAN SCREEN -->
+    <div id="screen-dewan" class="screen p-2">
+        <div class="bg-white p-2 rounded-xl shadow-sm mb-1 border border-slate-100">
+            <div class="flex justify-between items-center mb-1">
+                <button onclick="changeScreen('landing')" class="bg-orange-500 px-3 py-2 rounded-lg text-white shadow-md text-xs"><i class="fas fa-home"></i></button>
+                <div class="flex-1 mx-2">
+                    <select id="dw-match-selector" onchange="selectMatchFromDropdown(this.value)" class="w-full bg-slate-50 border-2 border-slate-200 p-1.5 rounded-lg text-[9px] font-black uppercase outline-none">
+                        <option value="">PILIH PARTAI...</option>
+                    </select>
+                </div>
+                <div class="text-center">
+                    <h1 id="dw-timer-disp" class="text-3xl font-black text-slate-800 leading-none">02:00</h1>
+                    <p id="dw-babak-disp" class="text-[9px] font-black text-red-600 uppercase mt-0.5">BABAK 1</p>
+                </div>
+            </div>
+            
+            <div class="flex justify-center gap-1 mb-1">
+                <button onclick="setRound(1)" id="dw-btn-b1" class="text-[8px] px-4 py-1 rounded-md border font-bold uppercase btn-raise">B 1</button>
+                <button onclick="setRound(2)" id="dw-btn-b2" class="text-[8px] px-4 py-1 rounded-md border font-bold uppercase btn-raise">B 2</button>
+                <button onclick="setRound(3)" id="dw-btn-b3" class="text-[8px] px-4 py-1 rounded-md border font-bold uppercase btn-raise">B 3</button>
+            </div>
+
+            <div class="grid grid-cols-5 gap-1">
+                <button onclick="timerCtrl('start')" class="btn-raise bg-emerald-500 border-emerald-700 text-white font-black text-[8px] py-1.5 rounded-md">START</button>
+                <button onclick="timerCtrl('stop')" class="btn-raise bg-red-500 border-red-700 text-white font-black text-[8px] py-1.5 rounded-md">STOP</button>
+                <button onclick="timerCtrl('reset')" class="btn-raise bg-slate-500 border-slate-700 text-white font-black text-[8px] py-1.5 rounded-md">RESET</button>
+                <button onclick="finishMatch()" class="btn-raise bg-amber-500 border-amber-700 text-white font-black text-[8px] py-1.5 rounded-md">FINISH</button>
+                <button id="btn-next-dewan" onclick="nextMatch()" class="btn-raise bg-purple-600 border-purple-800 text-white font-black text-[8px] py-1.5 rounded-md">NEXT</button>
+            </div>
+        </div>
+
+        <div class="space-y-1 mb-2">
+            <div id="info-current" class="status-header bg-emerald-50 border border-emerald-200 text-slate-700">
+                <div class="text-[7px] text-emerald-600 font-black mb-0.5">SEDANG BERTANDING:</div>
+                <div id="cur-match-detail">---</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-1">
+            <div id="box-biru" class="sudut-biru-bg p-2 rounded-xl text-center flex flex-col justify-center min-h-[85px] border-b-4 border-blue-800">
+                <p id="dw-b-nama" class="text-[11px] font-black uppercase truncate">---</p>
+                <p id="dw-b-kont" class="text-[8px] font-bold opacity-90 uppercase truncate mb-1">---</p>
+                <h2 id="dw-total-b" class="text-5xl font-black leading-none">0</h2>
+            </div>
+            <div id="box-merah" class="sudut-merah-bg p-2 rounded-xl text-center flex flex-col justify-center min-h-[85px] border-b-4 border-red-800">
+                <p id="dw-m-nama" class="text-[11px] font-black uppercase truncate">---</p>
+                <p id="dw-m-kont" class="text-[8px] font-bold opacity-90 uppercase truncate mb-1">---</p>
+                <h2 id="dw-total-m" class="text-5xl font-black leading-none">0</h2>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm overflow-hidden mb-2 border border-slate-200">
+            <table class="table-scoring">
+                <thead class="bg-slate-100">
+                    <tr class="text-[6px]">
+                        <th rowspan="2">PESILAT</th><th colspan="3">JURI 1</th><th colspan="3">JURI 2</th><th colspan="3">JURI 3</th><th rowspan="2">TOT</th>
+                    </tr>
+                    <tr class="text-[5px]"><th>B1</th><th>B2</th><th>B3</th><th>B1</th><th>B2</th><th>B3</th><th>B1</th><th>B2</th><th>B3</th></tr>
+                </thead>
+                <tbody id="dw-rt-table"></tbody>
+            </table>
+        </div>
+
+        <div id="dw-controls-area" class="grid grid-cols-2 gap-3 flex-1 overflow-y-auto custom-scroll pb-2">
+            <!-- Sudut Biru -->
+            <div class="grid grid-cols-2 gap-1.5 h-fit">
+                <button onclick="applyPenalty('biru','binaan1')" id="b-binaan1" class="btn-compact btn-raise border-blue-200"><i class="fas fa-hand-point-left text-blue-600 text-sm mb-1"></i>Binaan 1</button>
+                <button onclick="applyPenalty('biru','binaan2')" id="b-binaan2" class="btn-compact btn-raise border-blue-200"><i class="fas fa-hand-peace text-blue-600 text-sm rotate-90 mb-1"></i>Binaan 2</button>
+                <button onclick="applyPenalty('biru','teguran1')" id="b-teguran1" class="btn-compact btn-raise border-blue-200"><i class="fas fa-hand-point-up text-blue-600 text-sm mb-1"></i>Teguran 1</button>
+                <button onclick="applyPenalty('biru','teguran2')" id="b-teguran2" class="btn-compact btn-raise border-blue-200"><i class="fas fa-hand-peace text-blue-600 text-sm mb-1"></i>Teguran 2</button>
+                <button onclick="applyPenalty('biru','peringatan1')" id="b-peringatan1" class="btn-compact btn-raise border-blue-200"><span class="text-blue-600 text-sm font-black mb-1">!</span>Peringatan 1</button>
+                <button onclick="applyPenalty('biru','peringatan2')" id="b-peringatan2" class="btn-compact btn-raise border-blue-200"><span class="text-blue-600 text-sm font-black mb-1">!!</span>Peringatan 2</button>
+                <button onclick="addJatuhan('biru')" id="b-btn-jat" class="btn-raise sudut-biru-bg border-blue-800 text-[9px] font-black py-2 rounded-lg col-span-1">JATUHAN +3</button>
+                <button onclick="setDis('biru')" id="b-btn-dis" class="btn-raise bg-slate-800 border-black text-white text-[7px] font-black py-2 rounded-lg col-span-1">DISKUALIFIKASI</button>
+            </div>
+            <!-- Sudut Merah -->
+            <div class="grid grid-cols-2 gap-1.5 h-fit">
+                <button onclick="applyPenalty('merah','binaan1')" id="m-binaan1" class="btn-compact btn-raise border-red-200"><i class="fas fa-hand-point-left text-red-600 text-sm mb-1"></i>Binaan 1</button>
+                <button onclick="applyPenalty('merah','binaan2')" id="m-binaan2" class="btn-compact btn-raise border-red-200"><i class="fas fa-hand-peace text-red-600 text-sm rotate-90 mb-1"></i>Binaan 2</button>
+                <button onclick="applyPenalty('merah','teguran1')" id="m-teguran1" class="btn-compact btn-raise border-red-200"><i class="fas fa-hand-point-up text-red-600 text-sm mb-1"></i>Teguran 1</button>
+                <button onclick="applyPenalty('merah','teguran2')" id="m-teguran2" class="btn-compact btn-raise border-red-200"><i class="fas fa-hand-peace text-red-600 text-sm mb-1"></i>Teguran 2</button>
+                <button onclick="applyPenalty('merah','peringatan1')" id="m-peringatan1" class="btn-compact btn-raise border-red-200"><span class="text-red-600 text-sm font-black mb-1">!</span>Peringatan 1</button>
+                <button onclick="applyPenalty('merah','peringatan2')" id="m-peringatan2" class="btn-compact btn-raise border-red-200"><span class="text-red-600 text-sm font-black mb-1">!!</span>Peringatan 2</button>
+                <button onclick="addJatuhan('merah')" id="m-btn-jat" class="btn-raise sudut-merah-bg border-red-800 text-[9px] font-black py-2 rounded-lg col-span-1">JATUHAN +3</button>
+                <button onclick="setDis('merah')" id="m-btn-dis" class="btn-raise bg-slate-800 border-black text-white text-[7px] font-black py-2 rounded-lg col-span-1">DISKUALIFIKASI</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MONITOR SCREEN -->
+    <div id="screen-monitor" class="screen p-2 bg-slate-50">
+        <div class="flex justify-between items-center p-3 bg-white rounded-xl shadow-sm mb-2">
+            <button onclick="changeScreen('landing')" class="text-gray-400"><i class="fas fa-chevron-left"></i></button>
+            <div class="text-center">
+                <h1 id="mon-timer-disp" class="text-4xl font-black text-slate-800">02:00</h1>
+                <p id="mon-babak-disp" class="text-[10px] font-black text-red-600 uppercase">BABAK 1</p>
+            </div>
+            <div class="w-8"></div>
+        </div>
+        <div class="status-header bg-white border mb-2 text-center">
+            <span id="mon-match-info" class="text-[9px]">---</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-3">
+            <div id="mon-box-biru" class="sudut-biru-bg p-4 rounded-3xl text-center shadow-lg min-h-[120px] flex flex-col justify-center">
+                <p id="mon-b-nama" class="text-[14px] font-black uppercase truncate">---</p>
+                <p id="mon-b-kont" class="text-[10px] font-bold opacity-80 mb-2 truncate">---</p>
+                <h2 id="mon-total-b" class="text-6xl font-black">0</h2>
+            </div>
+            <div id="mon-box-merah" class="sudut-merah-bg p-4 rounded-3xl text-center shadow-lg min-h-[120px] flex flex-col justify-center">
+                <p id="mon-m-nama" class="text-[14px] font-black uppercase truncate">---</p>
+                <p id="mon-m-kont" class="text-[10px] font-bold opacity-80 mb-2 truncate">---</p>
+                <h2 id="mon-total-m" class="text-6xl font-black">0</h2>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200 flex-1">
+            <table class="w-full text-[10px] border-collapse">
+                <thead class="bg-slate-100">
+                    <tr class="text-[8px]">
+                        <th class="border p-2">PESILAT</th><th colspan="3" class="border">JURI 1</th><th colspan="3" class="border">JURI 2</th><th colspan="3" class="border">JURI 3</th><th class="border">TOT</th>
+                    </tr>
+                </thead>
+                <tbody id="mon-rt-table"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- JURI PANEL -->
+    <div id="screen-juri-select" class="screen p-8 justify-center items-center">
+        <h2 class="text-xl font-black mb-8 uppercase text-blue-600">Pilih Juri</h2>
+        <div class="grid grid-cols-1 gap-4 w-full max-w-xs">
+            <button onclick="initJuri(1)" class="p-6 bg-white border-2 border-blue-500 rounded-3xl font-black text-blue-600 uppercase">Juri 1</button>
+            <button onclick="initJuri(2)" class="p-6 bg-white border-2 border-blue-500 rounded-3xl font-black text-blue-600 uppercase">Juri 2</button>
+            <button onclick="initJuri(3)" class="p-6 bg-white border-2 border-blue-500 rounded-3xl font-black text-blue-600 uppercase">Juri 3</button>
+        </div>
+    </div>
+
+    <div id="screen-juri" class="screen bg-slate-100">
+        <div class="bg-slate-900 text-white p-3 flex justify-between items-center shadow-md">
+            <button onclick="changeScreen('landing')" class="text-[10px] font-bold text-gray-400">MENU</button>
+            <div class="text-center">
+                <span id="jr-role-name" class="text-[10px] font-black text-blue-400 block uppercase">---</span>
+                <span class="text-[8px] font-bold text-gray-500">PARTAI: <span id="jr-match-no">--</span></span>
+            </div>
+            <span id="jr-timer-disp" class="text-2xl font-black text-yellow-400">02:00</span>
+        </div>
+        <div class="p-2 bg-white border-b shadow-sm">
+            <div id="jr-match-info-detail" class="text-[8px] text-center font-bold uppercase leading-tight text-slate-600">---</div>
+        </div>
+        <div class="flex-1 flex flex-col p-2 gap-2 overflow-y-auto">
+            <div class="flex-1 sudut-biru-bg rounded-3xl p-3 flex flex-col shadow-lg border-b-4 border-blue-800">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1"><p id="jr-b-nama-full" class="text-[12px] font-black uppercase truncate">---</p></div>
+                    <div class="log-box w-24 text-right" id="jr-b-log"></div>
+                </div>
+                <div class="flex gap-2 flex-1">
+                    <button onclick="sendHitDirect('biru', 1)" class="flex-1 bg-white/20 border-2 border-white/40 rounded-2xl text-white font-black text-2xl">PUNCH +1</button>
+                    <button onclick="sendHitDirect('biru', 2)" class="flex-1 bg-white/20 border-2 border-white/40 rounded-2xl text-white font-black text-2xl">KICK +2</button>
+                </div>
+                <button onclick="undoLastHit('biru')" class="mt-2 bg-yellow-400 text-black font-black py-2 rounded-xl text-[10px] uppercase">HAPUS NILAI BIRU</button>
+            </div>
+            <div class="flex-1 sudut-merah-bg rounded-3xl p-3 flex flex-col shadow-lg border-b-4 border-red-800">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1"><p id="jr-m-nama-full" class="text-[12px] font-black uppercase truncate">---</p></div>
+                    <div class="log-box w-24 text-right" id="jr-m-log"></div>
+                </div>
+                <div class="flex gap-2 flex-1">
+                    <button onclick="sendHitDirect('merah', 1)" class="flex-1 bg-white/20 border-2 border-white/40 rounded-2xl text-white font-black text-2xl">PUNCH +1</button>
+                    <button onclick="sendHitDirect('merah', 2)" class="flex-1 bg-white/20 border-2 border-white/40 rounded-2xl text-white font-black text-2xl">KICK +2</button>
+                </div>
+                <button onclick="undoLastHit('merah')" class="mt-2 bg-yellow-400 text-black font-black py-2 rounded-xl text-[10px] uppercase">HAPUS NILAI MERAH</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL JURI IDENTITY -->
+    <div id="modal-juri-identity" class="fixed inset-0 bg-black/50 items-center justify-center hidden z-[1000]">
+        <div class="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl">
+            <h2 class="text-lg font-black mb-4 uppercase text-blue-600 text-center">Identitas Juri</h2>
+            <input type="text" id="input-juri-name-modal" class="w-full border-2 p-3 rounded-xl font-bold mb-6 outline-none uppercase" placeholder="NAMA JURI">
+            <button onclick="submitJuriIdentity()" class="w-full bg-blue-600 text-white font-black py-4 rounded-xl uppercase">KONFIRMASI</button>
+        </div>
+    </div>
+
+    <audio id="snd-hit" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCYUUBfB1ybStL8JvMc7pDE3EbRdOt8Rns",
+            authDomain: "digitalscor-silat.firebaseapp.com",
+            databaseURL: "https://digitalscor-silat-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "digitalscor-silat",
+            storageBucket: "digitalscor-silat.firebasestorage.app",
+            messagingSenderId: "502900773473",
+            appId: "1:502900773473:web:fd0c386ee266eceebad020"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database().ref("pencak_pro_v9"); 
+
+        const INITIAL_STATE = {
+            timer: 120, babak: 1, isRunning: false, idx: 0, 
+            bertandingIdx: -1, persiapanIdx: -1, isLocked: false, isFinished: false,
+            matches: Array.from({length: 100}, (_, i) => ({ 
+                p: i+1, m: "", b: "", km: "", kb: "", cat: "USIA DINI", kelas: "A", gender: "PUTRA", fase: "PENYISIHAN", status: 'idle'
+            })),
+            merah: { juri: {j1:[0,0,0], j2:[0,0,0], j3:[0,0,0]}, penHistory: [], jat: 0, history: {j1:[], j2:[], j3:[]}, dis: false },
+            biru: { juri: {j1:[0,0,0], j2:[0,0,0], j3:[0,0,0]}, penHistory: [], jat: 0, history: {j1:[], j2:[], j3:[]}, dis: false },
+            juriNames: { j1: "---", j2: "---", j3: "---" }
+        };
+
+        let state = INITIAL_STATE;
+        let localJuri = 0, tInt;
+
+        db.on('value', (snap) => {
+            const data = snap.val();
+            if (data) { state = data; updateUI(); } else broadcast();
+        });
+
+        function broadcast() { db.set(state); }
+
+        function startLocalTimer() {
+            if(tInt) clearInterval(tInt);
+            tInt = setInterval(() => {
+                if (state.isRunning && state.timer > 0) {
+                    state.timer--;
+                    db.child('timer').set(state.timer); 
+                } else if (state.timer <= 0) timerCtrl('stop');
+            }, 1000);
+        }
+
+        function changeScreen(id) { 
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); 
+            document.getElementById('screen-'+id).classList.add('active'); 
+            if(id === 'sekretaris') renderSekreForm();
+        }
+
+        function formatMatchInfo(m) {
+            if (!m || (!m.m && !m.b)) return "BELUM ADA DATA PERTANDINGAN";
+            return `PARTAI ${m.p} / ${m.fase} ${m.cat} ${m.kelas} ${m.gender} / <span class="text-red-600 font-black">${m.m || '-'} (${m.km || '-'})</span> VS <span class="text-blue-600 font-black">${m.b || '-'} (${m.kb || '-'})</span>`;
+        }
+
+        function updateUI() {
+            const m = state.matches[state.idx];
+            const mb = state.bertandingIdx >= 0 ? state.matches[state.bertandingIdx] : m;
+            const tStr = (s) => `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+            
+            // Dewan Timer
+            document.getElementById('dw-timer-disp').innerText = tStr(state.timer);
+            document.getElementById('dw-babak-disp').innerText = "BABAK " + state.babak;
+            
+            // Monitor Timer
+            if(document.getElementById('mon-timer-disp')) {
+                document.getElementById('mon-timer-disp').innerText = tStr(state.timer);
+                document.getElementById('mon-babak-disp').innerText = "BABAK " + state.babak;
+            }
+            
+            const fullInfo = formatMatchInfo(mb);
+            document.getElementById('cur-match-detail').innerHTML = fullInfo;
+            if(document.getElementById('mon-match-info')) document.getElementById('mon-match-info').innerHTML = fullInfo;
+            if(document.getElementById('jr-match-info-detail')) document.getElementById('jr-match-info-detail').innerHTML = fullInfo;
+
+            // Babak Lights (Dewan)
+            [1,2,3].forEach(b => {
+                const btn = document.getElementById('dw-btn-b'+b);
+                if(btn) state.babak === b ? btn.classList.add('active-babak') : btn.classList.remove('active-babak');
+            });
+
+            let tm = calculateTotal('merah'), tb = calculateTotal('biru');
+            
+            // Update Dewan Boxes
+            document.getElementById(`dw-m-nama`).innerText = mb.m || 'MERAH';
+            document.getElementById(`dw-m-kont`).innerText = mb.km || '---';
+            document.getElementById(`dw-total-m`).innerText = tm === -999 ? "DIS" : tm;
+            document.getElementById(`dw-b-nama`).innerText = mb.b || 'BIRU';
+            document.getElementById(`dw-b-kont`).innerText = mb.kb || '---';
+            document.getElementById(`dw-total-b`).innerText = tb === -999 ? "DIS" : tb;
+
+            // Update Monitor Boxes
+            if(document.getElementById('mon-m-nama')) {
+                document.getElementById(`mon-m-nama`).innerText = mb.m || 'MERAH';
+                document.getElementById(`mon-m-kont`).innerText = mb.km || '---';
+                document.getElementById(`mon-total-m`).innerText = tm === -999 ? "DIS" : tm;
+                document.getElementById(`mon-b-nama`).innerText = mb.b || 'BIRU';
+                document.getElementById(`mon-b-kont`).innerText = mb.kb || '---';
+                document.getElementById(`mon-total-b`).innerText = tb === -999 ? "DIS" : tb;
+            }
+
+            // RT Table
+            const buildTable = (sudutM, sudutB, totalM, totalB) => {
+                const rB = `<tr><td class="text-left font-bold px-1 text-blue-600">${sudutB.b || 'BIRU'}</td><td>${state.biru.juri.j1[0]}</td><td>${state.biru.juri.j1[1]}</td><td>${state.biru.juri.j1[2]}</td><td>${state.biru.juri.j2[0]}</td><td>${state.biru.juri.j2[1]}</td><td>${state.biru.juri.j2[2]}</td><td>${state.biru.juri.j3[0]}</td><td>${state.biru.juri.j3[1]}</td><td>${state.biru.juri.j3[2]}</td><td class="font-black bg-blue-50">${totalB===-999?'DIS':totalB}</td></tr>`;
+                const rM = `<tr><td class="text-left font-bold px-1 text-red-600">${sudutM.m || 'MERAH'}</td><td>${state.merah.juri.j1[0]}</td><td>${state.merah.juri.j1[1]}</td><td>${state.merah.juri.j1[2]}</td><td>${state.merah.juri.j2[0]}</td><td>${state.merah.juri.j2[1]}</td><td>${state.merah.juri.j2[2]}</td><td>${state.merah.juri.j3[0]}</td><td>${state.merah.juri.j3[1]}</td><td>${state.merah.juri.j3[2]}</td><td class="font-black bg-red-50">${totalM===-999?'DIS':totalM}</td></tr>`;
+                return rB + rM;
+            };
+            const rows = buildTable(mb, mb, tm, tb);
+            document.getElementById('dw-rt-table').innerHTML = rows;
+            if(document.getElementById('mon-rt-table')) document.getElementById('mon-rt-table').innerHTML = rows;
+
+            // Juri View
+            if(localJuri) {
+                document.getElementById('jr-role-name').innerText = state.juriNames['j'+localJuri];
+                document.getElementById('jr-match-no').innerText = mb.p;
+                document.getElementById('jr-m-nama-full').innerText = mb.m || "MERAH";
+                document.getElementById('jr-b-nama-full').innerText = mb.b || "BIRU";
+                document.getElementById('jr-timer-disp').innerText = tStr(state.timer);
+                document.getElementById('jr-m-log').innerText = (state.merah.history['j'+localJuri] || []).join(',');
+                document.getElementById('jr-b-log').innerText = (state.biru.history['j'+localJuri] || []).join(',');
+            }
+
+            syncPenaltyVisuals('merah');
+            syncPenaltyVisuals('biru');
+            if(document.getElementById('screen-sekretaris').classList.contains('active')) renderSekreBagan();
+        }
+
+        function syncPenaltyVisuals(sudut) {
+            const prefix = sudut === 'merah' ? 'm-' : 'b-';
+            const types = ['binaan1', 'binaan2', 'teguran1', 'teguran2', 'peringatan1', 'peringatan2'];
+            types.forEach(t => {
+                const btn = document.getElementById(prefix + t);
+                if(btn) {
+                    const isActive = state[sudut].penHistory.some(p => p.type === t && p.round === state.babak);
+                    isActive ? btn.classList.add('btn-pressed') : btn.classList.remove('btn-pressed');
+                }
+            });
+            const btnDis = document.getElementById(prefix + 'btn-dis');
+            if(btnDis) state[sudut].dis ? btnDis.classList.add('active-dis') : btnDis.classList.remove('active-dis');
+        }
+
+        function calculateTotal(s) {
+            const sc = state[s];
+            if(sc.dis) return -999;
+            const totJuri = (sc.juri.j1.reduce((a,b)=>a+b,0)) + (sc.juri.j2.reduce((a,b)=>a+b,0)) + (sc.juri.j3.reduce((a,b)=>a+b,0));
+            const penMap = { teguran1:1, teguran2:2, peringatan1:5, peringatan2:10, binaan1:0, binaan2:0 };
+            let tp = 0; sc.penHistory.forEach(item => { tp += penMap[item.type] || 0; });
+            return totJuri + sc.jat - tp;
+        }
+
+        // TIMER & ROUND CTRL
+        function timerCtrl(cmd) {
+            if(state.isLocked && cmd !== 'reset') return;
+            if(cmd === 'start') { state.isRunning = true; startLocalTimer(); }
+            else if(cmd === 'stop') { state.isRunning = false; clearInterval(tInt); }
+            else if(cmd === 'reset') { state.isRunning = false; state.timer = 120; }
+            broadcast();
+        }
+        function setRound(n) { if(!state.isRunning && !state.isLocked) { state.babak = n; broadcast(); } }
+        function addJatuhan(s) { if(!state.isLocked) { state[s].jat += 3; broadcast(); } }
+        function applyPenalty(s, p) {
+            if(state.isLocked) return;
+            const idx = state[s].penHistory.findIndex(x => x.type === p && x.round === state.babak);
+            if(idx > -1) state[s].penHistory.splice(idx, 1);
+            else state[s].penHistory.push({ type: p, round: state.babak });
+            broadcast();
+        }
+        function setDis(s) { if(!state.isLocked) { state[s].dis = !state[s].dis; broadcast(); } }
+        function finishMatch() {
+            if(confirm("Selesaikan partai ini?")) {
+                state.isFinished = true; state.isLocked = true; state.isRunning = false;
+                state.matches[state.idx].status = 'selesai';
+                state.bertandingIdx = -1;
+                broadcast();
+            }
+        }
+        function nextMatch() {
+            if(!state.isFinished) return alert("Klik FINISH dulu!");
+            if(state.idx < 99) { state.idx++; state.bertandingIdx = state.idx; resetActiveMatchData(); broadcast(); }
+        }
+        function resetActiveMatchData() {
+            state.timer = 120; state.babak = 1; state.isRunning = false; state.isLocked = false; state.isFinished = false;
+            state.merah = { juri: {j1:[0,0,0], j2:[0,0,0], j3:[0,0,0]}, penHistory: [], jat: 0, history: {j1:[], j2:[], j3:[]}, dis: false };
+            state.biru = { juri: {j1:[0,0,0], j2:[0,0,0], j3:[0,0,0]}, penHistory: [], jat: 0, history: {j1:[], j2:[], j3:[]}, dis: false };
+        }
+
+        // SEKRETARIS FUNCTIONS
+        function switchSekreTab(tab) {
+            document.querySelectorAll('.sekre-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-'+tab).classList.add('active');
+            if(tab === 'input') {
+                document.getElementById('sekre-input-view').classList.remove('hidden');
+                document.getElementById('sekre-bagan-view').classList.add('hidden');
+            } else {
+                document.getElementById('sekre-input-view').classList.add('hidden');
+                document.getElementById('sekre-bagan-view').classList.remove('hidden');
+                renderSekreBagan();
+            }
+        }
+
+        function renderSekreForm() {
+            const cont = document.getElementById('sekre-form-container');
+            cont.innerHTML = state.matches.map((m, i) => `
+                <div class="p-3 bg-white rounded-xl shadow-sm border border-slate-100">
+                    <div class="flex justify-between mb-2 font-black text-[10px]">PARTAI ${m.p}</div>
+                    <div class="grid grid-cols-4 gap-1 mb-2">
+                         <input id="in-fase-${i}" value="${m.fase}" class="border p-1 text-[8px] uppercase">
+                         <input id="in-cat-${i}" value="${m.cat}" class="border p-1 text-[8px] uppercase">
+                         <input id="in-kls-${i}" value="${m.kelas}" class="border p-1 text-[8px] uppercase">
+                         <input id="in-gen-${i}" value="${m.gender}" class="border p-1 text-[8px] uppercase">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <input id="in-m-n-${i}" value="${m.m}" placeholder="NAMA MERAH" class="border-b-2 border-red-500 p-1 text-[9px] uppercase">
+                        <input id="in-b-n-${i}" value="${m.b}" placeholder="NAMA BIRU" class="border-b-2 border-blue-500 p-1 text-[9px] uppercase">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input id="in-m-k-${i}" value="${m.km}" placeholder="KONTINGEN" class="border p-1 text-[8px] uppercase">
+                        <input id="in-b-k-${i}" value="${m.kb}" placeholder="KONTINGEN" class="border p-1 text-[8px] uppercase">
+                    </div>
+                </div>`).join('');
+        }
+
+        function saveSekreData() {
+            state.matches.forEach((m, i) => {
+                m.fase = document.getElementById(`in-fase-${i}`).value.toUpperCase();
+                m.cat = document.getElementById(`in-cat-${i}`).value.toUpperCase();
+                m.kelas = document.getElementById(`in-kls-${i}`).value.toUpperCase();
+                m.gender = document.getElementById(`in-gen-${i}`).value.toUpperCase();
+                m.m = document.getElementById(`in-m-n-${i}`).value.toUpperCase();
+                m.km = document.getElementById(`in-m-k-${i}`).value.toUpperCase();
+                m.b = document.getElementById(`in-b-n-${i}`).value.toUpperCase();
+                m.kb = document.getElementById(`in-b-k-${i}`).value.toUpperCase();
+            });
+            broadcast(); showNotif();
+        }
+
+        function renderSekreBagan() {
+            const tbody = document.getElementById('bagan-table-body');
+            tbody.innerHTML = state.matches.map((m, i) => {
+                const isTanding = state.bertandingIdx === i;
+                const isSiap = state.persiapanIdx === i;
+                const isSelesai = m.status === 'selesai';
+
+                return `
+                <tr class="border-b">
+                    <td class="p-2 text-center font-bold">${m.p}</td>
+                    <td class="p-2 leading-tight">
+                        <div class="font-bold">${m.fase} ${m.cat} ${m.kelas}</div>
+                        <div class="text-red-600">M: ${m.m || '-'} (${m.km || '-'})</div>
+                        <div class="text-blue-600">B: ${m.b || '-'} (${m.kb || '-'})</div>
+                    </td>
+                    <td class="p-2">
+                        <div class="flex flex-col gap-1">
+                            <button onclick="setBaganStatus(${i}, 'bertanding')" class="px-2 py-1 rounded text-[7px] font-bold ${isTanding ? 'light-tanding' : 'bg-slate-100 text-slate-400'}">TANDING</button>
+                            <button onclick="setBaganStatus(${i}, 'persiapan')" class="px-2 py-1 rounded text-[7px] font-bold ${isSiap ? 'light-siap' : 'bg-slate-100 text-slate-400'}">PERSIAPAN</button>
+                            <button onclick="setBaganStatus(${i}, 'selesai')" class="px-2 py-1 rounded text-[7px] font-bold ${isSelesai ? 'light-selesai' : 'bg-slate-100 text-slate-400'}">SELESAI</button>
+                        </div>
+                    </td>
+                    <td class="p-2">
+                        <div class="flex flex-col gap-1">
+                            <button onclick="editMatch(${i})" class="bg-blue-500 text-white px-2 py-1 rounded text-[7px] font-bold"><i class="fas fa-edit"></i> EDIT</button>
+                            <button onclick="deleteMatch(${i})" class="bg-red-500 text-white px-2 py-1 rounded text-[7px] font-bold"><i class="fas fa-trash"></i> HAPUS</button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function setBaganStatus(idx, type) {
+            if(type === 'bertanding') {
+                if(state.bertandingIdx === idx) {
+                    state.bertandingIdx = -1;
+                } else {
+                    state.bertandingIdx = idx;
+                    state.idx = idx;
+                    state.matches[idx].status = 'tanding';
+                    resetActiveMatchData();
+                }
+            } else if(type === 'persiapan') {
+                state.persiapanIdx = (state.persiapanIdx === idx) ? -1 : idx;
+            } else if(type === 'selesai') {
+                state.matches[idx].status = (state.matches[idx].status === 'selesai') ? 'idle' : 'selesai';
+                if(state.bertandingIdx === idx) state.bertandingIdx = -1;
+            }
+            broadcast();
+        }
+
+        function editMatch(idx) {
+            switchSekreTab('input');
+            const el = document.getElementById(`in-m-n-${idx}`);
+            if(el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function deleteMatch(idx) {
+            if(confirm(`Hapus data Partai ${idx+1}?`)) {
+                state.matches[idx] = { p: idx+1, m: "", b: "", km: "", kb: "", cat: "USIA DINI", kelas: "A", gender: "PUTRA", fase: "PENYISIHAN", status: 'idle' };
+                if(state.bertandingIdx === idx) state.bertandingIdx = -1;
+                if(state.persiapanIdx === idx) state.persiapanIdx = -1;
+                broadcast();
+            }
+        }
+
+        // JURI & IDENTITY
+        function initJuri(n) { localJuri = n; document.getElementById('modal-juri-identity').style.display = 'flex'; }
+        function submitJuriIdentity() {
+            state.juriNames['j'+localJuri] = document.getElementById('input-juri-name-modal').value.toUpperCase() || "JURI "+localJuri;
+            document.getElementById('modal-juri-identity').style.display = 'none';
+            broadcast(); changeScreen('juri');
+        }
+        function sendHitDirect(sudut, val) {
+            if(!state.isRunning || state.isLocked) return;
+            document.getElementById('snd-hit').play();
+            state[sudut].juri['j'+localJuri][state.babak-1] += val;
+            if(!state[sudut].history['j'+localJuri]) state[sudut].history['j'+localJuri] = [];
+            state[sudut].history['j'+localJuri].push(val);
+            broadcast();
+        }
+        function undoLastHit(sudut) {
+            if(!state.isRunning || state.isLocked) return;
+            let hist = state[sudut].history['j'+localJuri] || [];
+            if(hist.length > 0) {
+                let lastVal = hist.pop();
+                state[sudut].juri['j'+localJuri][state.babak-1] -= lastVal;
+                broadcast();
+            }
+        }
+
+        function selectMatchFromDropdown(v) { if(v!=="") { state.idx = parseInt(v); state.bertandingIdx = state.idx; resetActiveMatchData(); broadcast(); } }
+        function showNotif() { const ani = document.getElementById('save-ani'); ani.classList.add('show'); setTimeout(() => ani.classList.remove('show'), 2000); }
+        function resetAllData() { if(confirm("Hapus semua data sistem?")) { state = INITIAL_STATE; broadcast(); location.reload(); } }
+
+        updateUI();
+    </script>
+</body>
+</html>
